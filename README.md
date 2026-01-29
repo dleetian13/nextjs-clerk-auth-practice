@@ -57,6 +57,7 @@ Fourth, wrap your application with `<ClerkProvider>` component to provide active
             </SignedOut>
             <SignedIn>
               <UserButton />
+              <SignOut />
             </SignedIn>
           </header>
           {children}
@@ -80,10 +81,10 @@ export default function Page() {
 Second, to make the sign-in route public, modify proxy.ts to create a route matcher. If it's not a private route, don't `auth.protect()`.
 
 ```typescript
-const isPublicRoute = createRouteMatcher(['/sign-in(.*)']);
+const isProtectedRoute = createRouteMatcher(['/sign-in(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
+  if (isProtectedRoute(req)) {
     await auth.protect()
   }
 })
@@ -101,8 +102,78 @@ Lastly, update your environment variables:
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
+```
+
+# Part 3 - Authorization
+
+Protect routes based on user authorization status by checking if the user has the required role or permissions. There are two methods:
+
+- `auth.protect()` if you want Clerk to return a 404 if the user does not have the role or permission.
+- `auth().has()` if you want control over what your app does based on the authorization status.
 
 ```
+if (isProtectedRoute(req)) {
+  await auth.protect((has) => {
+    return {
+      has({permission: `org:sys_membership:manage`}) || 
+      has({permission: `org:sys_domains_manage`})
+    }
+  })
+}
+```
+
+# Part 4 - Reading session
+
+Reference: https://clerk.com/docs/nextjs/guides/users/reading
+
+`auth()`
+
+Returns the `Auth` object for the currently active user.
+Used to validate authentication, check if a user is logged in, etc.
+Works server-side (Route Handlers, Middleware, Server Components, Server Actions).
+
+`currentUser()`
+
+Returns the Backend User object, including info like name, email, etc.
+Counts toward the Backend API request rate limit, so it’s more expensive.
+Use on the server only when you need user data. On the client, prefer useUser().
+The `Backend User object` includes a `privateMetadata` field that should not be exposed to the frontend. Avoid passing the full user object returned by `currentUser()` to the frontend. Instead, pass only the specified fields you need.
+
+Summary: 
+
+- Use `auth()` to check authentication on the server. `useAuth` to check authentication on the client.
+- Use `currentUser()` to fetch Backend User object on the server. `useUser` to fetch User object (not Backend User) on the server, also doesn't count in API limits.
+- On the client, prefer `useUser()` to avoid hitting API limits.
+
+Example of Server Component/Action: 
+
+```typescript
+import { auth, currentUser } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  // Use `auth()` to access `isAuthenticated` - if false, the user is not signed in
+  const { isAuthenticated } = await auth()
+
+  // Protect the route by checking if the user is signed in
+  if (!isAuthenticated) {
+    return <div>Sign in to view this page</div>
+  }
+
+  // Get the Backend User object when you need access to the user's information
+  const user = await currentUser()
+
+  // Use `user` to render user details or create UI elements
+  return <div>Welcome, {user.firstName}!</div>
+}
+```
+
+
+
+
+
+
+
+
 
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
