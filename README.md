@@ -1,3 +1,10 @@
+# Other facts
+
+- `.env.local`. Loaded first, highest priority
+- `.env.development, .env.test, .env.production`. Depending on NODE_ENV
+- `.env`. Base default values
+
+# Part 1 - Initial Setup
 First, install the clerk dependencies using `pnpm add @clerk/nextjs`.
 
 Second, edit your environment variables.
@@ -56,6 +63,45 @@ Fourth, wrap your application with `<ClerkProvider>` component to provide active
         </body>
       </html>
     </ClerkProvider>
+```
+
+# Part 2 - Routing
+
+By default, `clerkMiddleware()` makes all routes public.
+
+First, create a sign-in component on a dedicated page using NextJS optional catch-all-route.
+
+```typescript
+export default function Page() {
+  return <SignIn/>
+}
+```
+
+Second, to make the sign-in route public, modify proxy.ts to create a route matcher. If it's not a private route, don't `auth.protect()`.
+
+```typescript
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)']);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (!isPublicRoute(req)) {
+    await auth.protect()
+  }
+})
+
+export const config = {//...}
+```
+
+Lastly, update your environment variables:
+
+- Set the CLERK_SIGN_IN_URL environment variable to tell Clerk where the <SignIn /> component is being hosted. When a user tries to access a protected page but is not authenticated, Clerk will redirect them to this URL.
+- Set CLERK_SIGN_IN_FALLBACK_REDIRECT_URL as a fallback URL incase users visit the /sign-in route directly.
+- Set CLERK_SIGN_UP_FALLBACK_REDIRECT_URL as a fallback URL incase users select the 'Don't have an account? Sign up' link at the bottom of the component. After a user signs up, Clerk usually wants to send them back to a specific page. If that page isn’t provided, this fallback is used.
+
+```bash
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
+
 ```
 
 
